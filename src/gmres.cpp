@@ -1,6 +1,9 @@
 #include <Rcpp.h>
 using namespace Rcpp;
 
+// [[Rcpp::depends(RcppEigen)]]
+// [[Rcpp::plugin(RcppEigen)]]
+
 #include <Eigen/IterativeLinearSolvers>
 #include <unsupported/Eigen/IterativeSolvers>
 

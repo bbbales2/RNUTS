@@ -1,16 +1,17 @@
 Package: RNUTS
 Type: Package
-Title: What the Package Does (Title Case)
+Title: R Implementation of NUTS sampler
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Authors@R: as.person(c(
+    "Arya Pourzanjani <pourzanj@gmail.com> [ctb, cre]", 
+    "Ben Bales <bbbales2@gmail.com> [ctb]"
+  ))
+Description: This an R implementation of the NUTS sampler in https://arxiv.org/abs/1701.02434.
+  It uses the original U-turn criteria from the original NUTS paper https://arxiv.org/abs/1111.4246
+License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
-Depends: tidyverse
-Suggests: testthat
-LinkingTo: Rcpp
-Imports:Rcpp
-RoxygenNote: 6.1.0
+Imports: tidyverse, rstan (>= 2.19.2), Rcpp (>= 1.0.2), RcppEigen, hamwrapper
+LinkingTo: Rcpp (>= 1.0.2), RcppEigen
+Suggests: 
+    testthat (>= 2.1.0)
