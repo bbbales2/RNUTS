@@ -21,7 +21,19 @@
 #' @export
 #'
 #' @examples
-create_generalized_newton_solve <- function(select_direction, select_stepsize, compute_residual, NTOL = 1e-6, MAX_ITER = 20) {
+createGeneralizedNewtonSolve <- function(select_direction = NULL, select_stepsize = NULL, compute_residual = NULL, NTOL = 1e-6, MAX_ITER = 20) {
+
+  if(is.null(select_direction)) {
+    select_direction = select_classic_newton_direction
+  }
+
+  if(is.null(select_stepsize)) {
+    select_stepsize = create_constant_select_stepsize
+  }
+
+  if(is.null(compute_residual)) {
+    compute_residual = compute_two_norm
+  }
 
   function(g, Jg, Jg_v, x0) {
 
