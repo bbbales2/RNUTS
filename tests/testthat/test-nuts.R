@@ -9,6 +9,13 @@ test_that("we can generate a sample", {
   q0 = rnorm(5)
   out = oneSampleNuts(q0, 0.1, ham)
   expect_equal(length(out$q), 5)
+
+  qs = sampleNuts(15, q0, 1.0, ham)
+  expect_equal(nrow(qs), 15)
+  expect_equal(ncol(qs), 5)
+
+  qs = sampleNuts(10, q0, 1.0, ham)
+  expect_equal(nrow(qs), 10)
 })
 
 test_that("we're roughly sampling a normal correctly", {

@@ -1,3 +1,2 @@
-useDynLib(RNUTS)
 exportPattern("^[[:alpha:]]+")
 importFrom(Rcpp, evalCpp)

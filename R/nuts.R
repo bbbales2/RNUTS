@@ -1,43 +1,33 @@
-#' Get multiple NUTS samples from a posterior
+#' Generate multiple MCMC draws using multinomial nuts
 #'
-#' @param num_samples
-#' @param q0
-#' @param h0
-#' @param ham_system
-#' @param integrator
-#' @param max_treedepth
-#' @param DEBUG
+#' @param numDraws Number of draws to take
+#' @inheritParams oneSampleNuts
 #'
-#' @return
+#' @return A matrix of draws. Columns are different parameters, rows are different draws
 #' @export
 sampleNuts <- function(numDraws, q0, h, ham, max_treedepth = 10) {
-  draws = 10000
-  qs = matrix(0, nrow = draws, ncol = length(q0))
+  qs = matrix(0, nrow = numDraws, ncol = length(q0))
   colnames(qs) = paste0("q", 1:length(q0))
   qs[1, ] = q0
-  for(draw in 2:draws) {
-    qs[draw, ] = oneSampleNuts(qs[draw - 1, ], h, ham, max_treedepth)$q
+  for(draw in 2:numDraws) {
+    out = oneSampleNuts(qs[draw - 1, ], h, ham, max_treedepth)
+    qs[draw, ] = out$q
   }
 
   return(qs)
 }
 
-log_sum_exp <- function (x) {
+log_sum_exp = function (x) {
   y = max(x)
   y + log(sum(exp(x - y)))
 }
 
-softmax <- function (x) {
+softmax = function (x) {
   exp(x - log_sum_exp(x))
 }
 
 norm = function(v) {
   sqrt(sum(v^2))
-}
-
-min_uturn = function(q_plus, q_minus, p_plus, p_minus) {
-  min(as.numeric(p_plus %*% (q_plus - q_minus)) / (norm(p_plus) * norm(q_plus - q_minus)),
-      as.numeric(-p_minus %*% (q_minus - q_plus)) / (norm(p_minus) * norm(q_minus - q_plus)))
 }
 
 uturn = function(q_plus, q_minus, p_plus, p_minus) {
@@ -47,8 +37,19 @@ uturn = function(q_plus, q_minus, p_plus, p_minus) {
   return(!(no_uturn_forward & no_uturn_backward))
 }
 
+#' Generate a draw using Multinomial NUTS (https://arxiv.org/abs/1701.02434 with the original
+#' Uturn criteria https://arxiv.org/abs/1111.4246)
+#'
+#' @param q0 current draw
+#' @param h leapfrog stepsize
+#' @param ham system hamiltonian (generated from hamwrapper library)
+#' @param max_treedepth max treedepth
+#' @param debug if true, then return a bunch of debugging info, otherwise return only the next draw
+#' @param seed use the same seed to get the same behavior -- if NULL, make one up. Whatever is used is returned if debug == TRUE
+#' @return if debug is false, list containing single element (q) containing next draw. If debug is true, a lot of stuff
+#'
 #' @export
-oneSampleNuts = function(q0, h, ham, max_treedepth = 10, DEBUG = FALSE, seed = NULL) {
+oneSampleNuts = function(q0, h, ham, max_treedepth = 10, debug = FALSE, seed = NULL) {
   if(is.null(seed)) {
     seed = sample.int(.Machine$integer.max, 1)
   }
@@ -82,9 +83,9 @@ oneSampleNuts = function(q0, h, ham, max_treedepth = 10, DEBUG = FALSE, seed = N
   log_pi[i_first] = -H0
   i_left = i_first
   i_right = i_first
-  uturn_detected = rep(0, max_treedepth)
   log_sum_pi_old = log_pi[i_first]
   i_old = i_first
+
   uturn_scores = c()
   uturn_left = c()
   uturn_right = c()
@@ -119,23 +120,13 @@ oneSampleNuts = function(q0, h, ham, max_treedepth = 10, DEBUG = FALSE, seed = N
         starts = seq(1, length(depth_steps), div_length)
         ends = starts + div_length - 1
 
-        if(directions[depth] < 0) {
-          tmp = starts
-          starts = ends
-          ends = tmp
-        }
+        sorted_depth_steps = sort(depth_steps)
 
         for(j in 1:length(starts)) {
-          is_uturn = uturn(qs[depth_steps[starts[j]], ],
-                             qs[depth_steps[ends[j]], ],
-                             ps[depth_steps[starts[j]], ],
-                             ps[depth_steps[ends[j]], ])
-          uturn_scores = c(uturn_scores, min_uturn(qs[depth_steps[starts[j]], ],
-                                                 qs[depth_steps[ends[j]], ],
-                                                 ps[depth_steps[starts[j]], ],
-                                                 ps[depth_steps[ends[j]], ]))
-          uturn_left = c(uturn_left, depth_steps[ends[j]])
-          uturn_right = c(uturn_right, depth_steps[starts[j]])
+          is_uturn = uturn(qs[sorted_depth_steps[ends[j]], ],
+                             qs[sorted_depth_steps[starts[j]], ],
+                             ps[sorted_depth_steps[ends[j]], ],
+                             ps[sorted_depth_steps[starts[j]], ])
 
           if(is_uturn) {
             uturn_detected_new_tree = TRUE
@@ -149,16 +140,12 @@ oneSampleNuts = function(q0, h, ham, max_treedepth = 10, DEBUG = FALSE, seed = N
       }
     }
 
-    uturn_detected[depth] = uturn_detected_new_tree | uturn(qs[i_right, ], qs[i_left, ], ps[i_right, ], ps[i_left, ])
-    uturn_scores = c(uturn_scores, min_uturn(qs[i_right, ], qs[i_left, ], ps[i_right, ], ps[i_left, ]))
-    uturn_left = c(uturn_left, i_left)
-    uturn_right = c(uturn_right, i_right)
+    uturn_detected = uturn_detected_new_tree | uturn(qs[i_right, ], qs[i_left, ], ps[i_right, ], ps[i_left, ])
 
-    if(uturn_detected[depth]) {
+    if(uturn_detected) {
       break
     }
 
-    log_sum_pi_old = log_pi[i_first]
     log_sum_pi_new = log_sum_exp(log_pi[depth_steps])
 
     if(length(depth_steps) > 1) {
@@ -167,32 +154,36 @@ oneSampleNuts = function(q0, h, ham, max_treedepth = 10, DEBUG = FALSE, seed = N
       i_new = depth_steps
     }
 
-    i_old = sample(c(i_old, i_new), 1, prob = softmax(c(log_sum_pi_old, log_sum_pi_new)))
+    p_new = min(1, exp(log_sum_pi_new - log_sum_pi_old))
+
+    #print(paste("log_sum_pi_old", log_sum_pi_old))
+    #print(paste("log_sum_pi_new", log_sum_pi_new))
+    #print(paste("p_new", p_new))
+    #print(softmax(c(log_sum_pi_old, log_sum_pi_new)))
+    #print("--")
+
+    i_old = sample(c(i_old, i_new), 1, prob = c(1 - p_new, p_new))
+
+    log_sum_pi_old = log_sum_exp(c(log_sum_pi_old, log_sum_pi_new))
   }
   q = qs[i_old, ]
 
-  if(DEBUG) {
+  if(debug) {
     colnames(qs) = paste0("q", 1:length(q0))
     colnames(ps) = paste0("p", 1:length(p0))
     trajectory = bind_cols(c(tibble(log_pi = log_pi,
                        depth_map = depth_map),
                 as_tibble(qs),
                 as_tibble(ps)))[which(depth_map <= depth),]
-    uturn_data = tibble(uturn_scores = uturn_scores,
-                        uturn_left = uturn_left,
-                        uturn_right = uturn_right) %>%
-      mutate(depth = log2(uturn_right - uturn_left + 1))
     return(list(q = q,
-                i = i_old,
+                i = i_old - min(which(depth_map <= depth)) + 1,
                 q0 = q0,
                 h = h,
                 max_treedepth = max_treedepth,
                 seed = seed,
-                uturn_data = uturn_data,
                 trajectory = trajectory,
                 directions = directions,
-                uturn_detected = uturn_detected[1:depth],
-                steps = steps[1:depth]))
+                steps = steps))
   } else {
     return(list(q = q))
   }
