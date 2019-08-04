@@ -34,6 +34,7 @@ min_uturn = function(q_plus, q_minus, p_plus, p_minus) {
 tree_depth = log2(nrow(out$trajectory))
 qs = out$trajectory %>% select(starts_with("q")) %>% as.matrix
 ps = out$trajectory %>% select(starts_with("p")) %>% as.matrix
+is_uturn = c()
 uturn_scores = c()
 uturn_left = c()
 uturn_right = c()
