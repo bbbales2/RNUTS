@@ -112,13 +112,20 @@ uturn %>%
   ylab("Uturn score\nIt's just the minimum of the two checks done") +
   ggtitle("Score below the red line (zero) indicates uturn")
 
+# This is some stuff to get the color scale set up
+min_scores = min(pull(uturn, scores))
+max_scores = max(pull(uturn, scores))
+rescale_to_0_1 = function(v) {
+  (v - min(v)) / (max(v) - min(v))
+}
+
 # Plot all the uturn checks in tree form
 uturn %>%
   mutate(depth = right - left + 1) %>%
   ggplot(aes()) +
   geom_curve(aes(x = left, xend = (left + right) / 2.0, y = 0, yend = depth, color = scores, linetype = valid), curvature = -0.25) +
   geom_curve(aes(x = (left + right) / 2.0, xend = right, y = depth, yend = 0, color = scores, linetype = valid), curvature = -0.25) +
-  scale_color_gradient2(midpoint = 0.0, low = "red", mid = "green", high = "blue") +
+  scale_color_gradientn(values = rescale_to_0_1(c(min_scores, -1e-8, 1e-8, max_scores)), colors = c("red", "red", "green", "blue")) +
   scale_linetype_manual(values = c("dashed", "solid")) +
   xlab("Point in trajectory") +
   theme(axis.title.y = element_blank(),
