@@ -101,6 +101,9 @@ oneSampleNuts = function(q0, h, ham, max_treedepth = 10, debug = FALSE, seed = N
   # i_old will be the sample chosen (the sample from T(z' | told) in section
   #  A.3.1 of https://arxiv.org/abs/1701.02434)
   i_old = i_first
+  # We need to know whether we terminated the trajectory cause of a uturn or we
+  #  hit the max trajectory length
+  uturn_detected = FALSE
   # For trees of increasing treedepth
   for(depth in 1:max_treedepth) {
     # Figure out what leapfrog steps we need to compute. If integrating in the
@@ -227,7 +230,8 @@ oneSampleNuts = function(q0, h, ham, max_treedepth = 10, debug = FALSE, seed = N
     trajectory = bind_cols(c(tibble(log_pi = log_pi,
                        depth_map = depth_map),
                 as_tibble(qs),
-                as_tibble(ps)))[which(depth_map <= depth),]
+                as_tibble(ps)))[which(depth_map <= depth),] %>%
+      mutate(valid = if(!uturn_detected) TRUE else (depth_map < depth))
     return(list(q = q, # new sample
                 i = i_old - min(which(depth_map <= depth)) + 1, # q is the ith row of trajectory
                 q0 = q0,

@@ -2,6 +2,7 @@ library(tidyverse)
 library(rstan)
 library(ggplot2)
 library(hamwrapper)
+library(RNUTS)
 
 # Use the test model included in the package
 testModelFile = system.file("extdata", "normal.stan", package = "RNUTS")
@@ -18,7 +19,7 @@ rstan::monitor(array(qs[,1], dim = c(nrow(qs), 1, 1)), warmup = 0, print = FALSE
 #   Scroll down to the end of the file to see a plot diagnosing the U-turn
 ham = createHamiltonianSystem(testModelFile, list(N = 2))
 q0 = rnorm(2)
-out = oneSampleNuts(q0, 0.1, ham, debug = TRUE, seed = 633273650)
+out = oneSampleNuts(q0, 0.1, ham, debug = TRUE)
 
 # Compute minimum of the two uturn criteria
 min_uturn = function(q_plus, q_minus, p_plus, p_minus) {
@@ -27,8 +28,8 @@ min_uturn = function(q_plus, q_minus, p_plus, p_minus) {
 }
 
 # This checks all the uturn criteria after the fact. I took this out of the
-# sampler implementation so that the implementation would only have code that
-# is necessary for
+# sampler implementation so that the implementation so that would only have code
+# absolutely necessary to sampling. Not sure if it's better out or in, honestly.
 #
 #uturn_detected = FALSE
 tree_depth = log2(nrow(out$trajectory))
@@ -38,6 +39,7 @@ is_uturn = c()
 uturn_scores = c()
 uturn_left = c()
 uturn_right = c()
+uturn_depths = c()
 if(tree_depth > 0) {
   for(uturn_depth in tree_depth:1) {
     div_length = 2^(uturn_depth)
@@ -56,6 +58,7 @@ if(tree_depth > 0) {
                                                ps[starts[j], ]))
       uturn_left = c(uturn_left, starts[j])
       uturn_right = c(uturn_right, ends[j])
+      uturn_depths = c(uturn_depths, uturn_depth)
 
       # Checking all uturns for now
       #if(is_uturn) {
@@ -69,14 +72,56 @@ if(tree_depth > 0) {
     #}
   }
 }
+
+# The first uturn we hit will be the uturn that happens earliest in the last
+#  trajectory expansion. To figure out which uturn this is, we need to figure
+#  out which point is the first step in the last trajectory expansion
+depth_map = out$trajectory %>% pull(depth_map)
+last_integration_steps = which(depth_map == max(depth_map))
+if(min(last_integration_steps) == 1) {
+  initial_last_integration_step = max(last_integration_steps)
+} else {
+  initial_last_integration_step = min(last_integration_steps)
+}
+
+# Mark uturn checks that touch the invalid tree as invalid
 uturn = tibble(scores = uturn_scores,
                left = uturn_left,
-               right = uturn_right)
+               right = uturn_right) %>%
+  mutate(valid = out$trajectory[left,] %>% pull(valid) & out$trajectory[right,] %>% pull(valid))
 
+# Figure out the first uturn (the first one we hit during the last expansion)
+#  that would have made the tree invalid
+invalid_uturn = uturn %>%
+  filter(valid == FALSE,
+         scores < 0.0) %>%
+  mutate(distance = pmax(abs(left - initial_last_integration_step),
+                         abs(right - initial_last_integration_step))) %>%
+  top_n(1, -distance) %>%
+  select(-distance)
+
+# Plot the uturn scores as a function of distance
 uturn %>%
+  filter(valid == TRUE) %>%
+  bind_rows(invalid_uturn) %>%
   ggplot(aes(right - left, scores)) +
   geom_point() +
   geom_hline(yintercept = 0, color = "red") +
   scale_x_log10() +
   xlab("Trajectory length") +
-  ggtitle("score below the red line (zero) indicates uturn")
+  ylab("Uturn score\nIt's just the minimum of the two checks done") +
+  ggtitle("Score below the red line (zero) indicates uturn")
+
+# Plot all the uturn checks in tree form
+uturn %>%
+  mutate(depth = right - left + 1) %>%
+  ggplot(aes()) +
+  geom_curve(aes(x = left, xend = (left + right) / 2.0, y = 0, yend = depth, color = scores, linetype = valid), curvature = -0.25) +
+  geom_curve(aes(x = (left + right) / 2.0, xend = right, y = depth, yend = 0, color = scores, linetype = valid), curvature = -0.25) +
+  scale_color_gradient2(midpoint = 0.0, low = "red", mid = "green", high = "blue") +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  xlab("Point in trajectory") +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ggtitle("Uturn checks\nA score less than zero is a uturn.\nGreen on the scale is set to zero.")
