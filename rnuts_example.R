@@ -131,4 +131,4 @@ uturn %>%
   theme(axis.title.y = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank()) +
-  ggtitle("Uturn checks\nA score less than zero is a uturn.\nGreen on the scale is set to zero.")
+  ggtitle("Uturn checks\nA score less than zero is a uturn.\nMake sure to look at the discontinuity at 0.0 in the color scale")
